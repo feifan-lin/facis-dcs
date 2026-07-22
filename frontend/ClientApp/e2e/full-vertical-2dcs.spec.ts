@@ -61,7 +61,7 @@ test.describe.configure({ retries: 0 })
 
 let bInstance: Awaited<ReturnType<typeof openInstanceB>> | undefined
 test.afterEach(async () => {
-  await bInstance?.context.close().catch(() => {})
+  await bInstance?.context.close().catch(() => undefined)
   bInstance = undefined
 })
 
@@ -226,6 +226,13 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
 
     await a.gotoAs('Auditor', '/ui/audit')
     await a.page.getByLabel('Scope').selectOption('contracts')
+    await a.page.getByLabel('DID (optional)').fill(contractDid)
+    await a.page.getByLabel('Audit justification').fill('Full two-instance vertical E2E audit')
+    const audited = a.page.waitForResponse((r) => r.url().includes('/pac/audit') && r.request().method() === 'POST', {
+      timeout: 90_000,
+    })
+    await a.page.getByRole('button', { name: 'Execute Audit' }).click()
+    expect((await audited).ok()).toBeTruthy()
     await expect(a.page.getByRole('cell', { name: contractDid }).first()).toBeVisible({
       timeout: 60_000,
     })
