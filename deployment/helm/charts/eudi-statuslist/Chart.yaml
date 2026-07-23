@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eudi-statuslist
+description: EUDI Token Status List service (eudi-srv-statuslist-py) for PID credential status
+type: application
+version: 0.1.0
+home: https://github.com/eu-digital-identity-wallet/eudi-srv-statuslist-py

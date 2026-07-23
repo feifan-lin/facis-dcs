@@ -13,6 +13,7 @@ from dcs_wallet.sdjwt import (
     DEFAULT_SD_ALG,
     KB_JWT_IAT_LEEWAY_SEC,
     decode_disclosure,
+    dependent_disclosures,
     disclosure_digest,
     join_sd_jwt,
     sd_hash,
@@ -23,7 +24,7 @@ VP_FORMAT = "dc+sd-jwt"
 _REQUIRED_EC_PUBLIC_FIELDS = ("kty", "crv", "x", "y")
 
 _DEFAULT_DISCLOSURE_CLAIMS_BY_VCT: dict[str, list[str]] = {
-    "urn:eudi:pid:de:1": ["given_name", "family_name", "birthdate", "status"],
+    "urn:eudi:pid:1": ["given_name", "family_name", "birthdate", "status"],
     "urn:eudi:eaa:loyalty-card:1": ["given_name", "family_name", "birthdate", "status"],
     "urn:dcs:poa:v1": ["organization", "roles"],
 }
@@ -99,7 +100,13 @@ def _top_level_sd_disclosures(disclosures: list[str], *, issuer_payload: dict[st
     return selected if selected else disclosures
 
 
-def _filter_disclosures_by_claim_names(disclosures: list[str], claim_names: list[str]) -> list[str]:
+def _filter_disclosures_by_claim_names(
+    disclosures: list[str],
+    claim_names: list[str],
+    *,
+    all_disclosures: list[str] | None = None,
+    sd_alg: str = DEFAULT_SD_ALG,
+) -> list[str]:
     if not claim_names:
         return disclosures
     requested = {name.strip() for name in claim_names if name.strip()}
@@ -117,10 +124,18 @@ def _filter_disclosures_by_claim_names(disclosures: list[str], claim_names: list
         claim_name = decoded[1]
         if isinstance(claim_name, str) and claim_name in requested:
             filtered.append(disclosure)
-    return filtered if filtered else disclosures
+    if not filtered:
+        return disclosures
+    return dependent_disclosures(filtered, all_disclosures or disclosures, sd_alg=sd_alg)
 
 
-def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_claim_paths: list[list[str]] | None) -> list[str]:
+def _filter_disclosures_by_requested_claims(
+    disclosures: list[str],
+    requested_claim_paths: list[list[str]] | None,
+    *,
+    all_disclosures: list[str] | None = None,
+    sd_alg: str = DEFAULT_SD_ALG,
+) -> list[str]:
     if not requested_claim_paths:
         return disclosures
     requested_top_level = [
@@ -128,7 +143,12 @@ def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_cl
         for path in requested_claim_paths
         if isinstance(path, list) and path and str(path[0]).strip()
     ]
-    return _filter_disclosures_by_claim_names(disclosures, requested_top_level)
+    return _filter_disclosures_by_claim_names(
+        disclosures,
+        requested_top_level,
+        all_disclosures=all_disclosures,
+        sd_alg=sd_alg,
+    )
 
 
 def _select_disclosures(
@@ -138,15 +158,27 @@ def _select_disclosures(
     sd_alg: str,
     requested_claim_paths: list[list[str]] | None,
 ) -> list[str]:
-    disclosures = _top_level_sd_disclosures(disclosures, issuer_payload=issuer_payload, sd_alg=sd_alg)
+    all_disclosures = list(disclosures)
+    top_level = _top_level_sd_disclosures(disclosures, issuer_payload=issuer_payload, sd_alg=sd_alg)
     if requested_claim_paths:
-        return _filter_disclosures_by_requested_claims(disclosures, requested_claim_paths)
+        return _filter_disclosures_by_requested_claims(
+            top_level,
+            requested_claim_paths,
+            all_disclosures=all_disclosures,
+            sd_alg=sd_alg,
+        )
 
     vct = str(issuer_payload.get("vct") or "")
     default_claims = _DEFAULT_DISCLOSURE_CLAIMS_BY_VCT.get(vct)
     if default_claims:
-        return _filter_disclosures_by_claim_names(disclosures, default_claims)
-    return disclosures
+        return _filter_disclosures_by_claim_names(
+            top_level,
+            default_claims,
+            all_disclosures=all_disclosures,
+            sd_alg=sd_alg,
+        )
+    
+    return dependent_disclosures(top_level, all_disclosures, sd_alg=sd_alg)
 
 
 def build_vp_token(

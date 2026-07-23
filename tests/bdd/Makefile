@@ -51,6 +51,9 @@ DOCKER_IMAGE ?= $(DOCKER_IMAGE_REPOSITORY):$(DOCKER_IMAGE_TAG)
 PDF_CORE_IMAGE_REPOSITORY ?= pdf-core
 PDF_CORE_IMAGE_TAG ?= bdd
 PDF_CORE_IMAGE ?= $(PDF_CORE_IMAGE_REPOSITORY):$(PDF_CORE_IMAGE_TAG)
+# No published GHCR image for eudi-srv-statuslist-py — build locally.
+EUDI_STATUSLIST_IMAGE ?= eudi-srv-statuslist:v0.9.0
+EUDI_STATUSLIST_BUILD_SCRIPT ?= $(PROJECT_ROOT)/scripts/build-eudi-statuslist-image.sh
 KIND_NAMESPACE ?= dcs-bdd
 KIND_HELM_VALUES ?=
 KIND_HELM_SET ?=
@@ -87,7 +90,7 @@ BDD_HELM_SET_B := \
 	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/callback" \
 	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/logout-complete"
 
-.PHONY: kind_export_kubeconfig setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci run_e2e_kind run_e2e_kind_ci run_bdd_audit_kind_ci build_dcs_image clean help kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
+.PHONY: kind_export_kubeconfig setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_load_eudi_statuslist_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci run_e2e_kind run_e2e_kind_ci run_bdd_audit_kind_ci build_dcs_image build_pdf_core_image build_eudi_statuslist_image clean help kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
@@ -183,6 +186,9 @@ build_dcs_image:
 build_pdf_core_image:
 	@$(DOCKER_BUILD) $(PDF_CORE_BUILD_CACHE) -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../..
 
+build_eudi_statuslist_image:
+	@EUDI_STATUSLIST_IMAGE="$(EUDI_STATUSLIST_IMAGE)" bash "$(EUDI_STATUSLIST_BUILD_SCRIPT)"
+
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
 
@@ -195,7 +201,7 @@ ensure_k8s_tools:
 # otherwise deploys land wherever the context points while the suite's
 # host-port datapath (18080) always reaches the kind cluster.
 KIND_KUBECONFIG := $(CURDIR)/.tmp/kind-kubeconfig
-KIND_GOALS := kind_create kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b \
+KIND_GOALS := kind_create kind_load_image kind_load_pdf_core_image kind_load_eudi_statuslist_image kind_deploy kind_deploy_b \
 	kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci \
 	run_e2e_kind run_e2e_kind_ci \
 	run_bdd_audit_kind_ci kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
@@ -244,7 +250,15 @@ kind_load_pdf_core_image: kind_create
 	@docker image inspect "$(PDF_CORE_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(PDF_CORE_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(PDF_CORE_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
-kind_deploy: kind_load_image kind_load_pdf_core_image kind_load_dss_image
+kind_load_eudi_statuslist_image: kind_create
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "docker is required to load $(EUDI_STATUSLIST_IMAGE) into kind"; \
+		exit 1; \
+	fi
+	@docker image inspect "$(EUDI_STATUSLIST_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(EUDI_STATUSLIST_IMAGE). Build it first." && exit 1)
+	@"$(KIND_BIN)" load docker-image "$(EUDI_STATUSLIST_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
+
+kind_deploy: kind_load_image kind_load_pdf_core_image kind_load_eudi_statuslist_image kind_load_dss_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	@"$(HELM_BIN)" repo add traefik https://traefik.github.io/charts --force-update
 	@"$(HELM_BIN)" repo update
@@ -401,7 +415,7 @@ run_bdd_kind_all: kind_deploy_b
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)"
 
-run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
+run_bdd_kind_ci: build_dcs_image build_pdf_core_image build_eudi_statuslist_image run_bdd_kind
 
 # The Playwright E2E counterpart of run_bdd_kind_ci: same build + two-instance
 # deploy, but RUN_MODE=e2e makes run_bdd_helm run the Playwright suite against
@@ -414,9 +428,9 @@ run_e2e_kind: kind_deploy_b
 		HELM_RELEASE="$(HELM_RELEASE)" \
 		RUN_MODE="e2e"
 
-run_e2e_kind_ci: build_dcs_image build_pdf_core_image run_e2e_kind
+run_e2e_kind_ci: build_dcs_image build_pdf_core_image build_eudi_statuslist_image run_e2e_kind
 
-run_bdd_audit_kind_ci: build_dcs_image build_pdf_core_image kind_deploy
+run_bdd_audit_kind_ci: build_dcs_image build_pdf_core_image build_eudi_statuslist_image kind_deploy
 	@$(MAKE) run_bdd_audit_kind_once
 
 # The community-packaged EU DSS 6.2 demonstration webapp (visible-PAdES rQES).
@@ -434,13 +448,13 @@ clean:
 
 # start kind cluster, deploy DCS and dependencies (both instances), and
 # prepare for BDD runs
-kind_up: build_dcs_image build_pdf_core_image kind_deploy_b setup_environment ensure_k8s_tools
+kind_up: build_dcs_image build_pdf_core_image build_eudi_statuslist_image kind_deploy_b setup_environment ensure_k8s_tools
 	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with DCS deployed in namespace $(KIND_NAMESPACE)"
 	@echo "You can now run 'make run_bdd_kind_once' to execute the BDD suite against this cluster without redeploying between runs."
 
 # Audit/archive/ORCE needs only instance A. ORCE still uses persistent storage
 # so the receipt chain survives the restart scenario.
-kind_up_audit: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
+kind_up_audit: build_dcs_image build_pdf_core_image build_eudi_statuslist_image kind_deploy setup_environment ensure_k8s_tools
 	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with the single-instance audit BDD stack"
 	@echo "Run 'make run_bdd_audit_kind_once' to execute the focused feature."
 

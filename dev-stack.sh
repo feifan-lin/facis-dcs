@@ -12,6 +12,7 @@ set -euo pipefail
 trap 'kill $(jobs -p) 2>/dev/null; exit' INT TERM
 
 # Config
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 HELM_RELEASE="dcs"
 HELM_CHART_PATH="deployment/helm"
 HELM_VALUES_FILE="deployment/helm/values.dev.yml"
@@ -22,6 +23,10 @@ TSA_TRUST_CERT_FILE="backend/certs/dev/orce-tsa-cert.pem"
 TSA_TRUST_SECRET="${HELM_RELEASE}-orce-tsa-material"
 
 echo "=== Setting up dev environment ==="
+
+# No published GHCR image for eudi-srv-statuslist-py — build locally.
+echo "Building EUDI statuslist image..."
+bash "$ROOT/scripts/build-eudi-statuslist-image.sh"
 
 # Helm: idempotent install-or-upgrade so this script works whether or not
 # the release was already installed manually first.

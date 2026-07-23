@@ -1,0 +1,48 @@
+{{- if and .Values.ingress.enabled .Values.ingress.host .Values.ingress.wellKnownPathRewrite.enabled }}
+{{- $suffix := trimAll "/" (.Values.ingress.wellKnownPathRewrite.pathSuffix | default .Values.wellKnownPathRewrite.pathSuffix | default "realms/gaia-x") }}
+{{- $ns := .Release.Namespace | default "default" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-keycloak-well-known
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-keycloak-well-known-rewrite@kubernetescrd" $ns .Release.Name | quote }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /.well-known/oauth-authorization-server/{{ $suffix }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-keycloak
+                port:
+                  number: {{ .Values.service.port }}
+          - path: /.well-known/openid-configuration/{{ $suffix }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-keycloak
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

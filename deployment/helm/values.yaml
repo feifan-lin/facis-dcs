@@ -275,6 +275,12 @@ statuslistService:
       cpu: 300m
       memory: 512Mi
 
+eudiStatuslist:
+  enabled: false
+
+eudiPidIssuer:
+  enabled: false
+
 # XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
 # See charts/federated-catalogue/values.yaml for all configurable fields.
 federatedCatalogue:

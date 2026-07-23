@@ -1,3 +1,4 @@
+{{- $edgeProxy := or .Values.wellKnownPathRewrite.enabled .Values.cors.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,20 +14,64 @@ spec:
       labels:
         app.kubernetes.io/name: keycloak
         app.kubernetes.io/instance: {{ .Release.Name }}
+      {{- if $edgeProxy }}
+      annotations:
+        checksum/edge-proxy: {{ include (print $.Template.BasePath "/edge-proxy-configmap.yaml") . | sha256sum }}
+      {{- end }}
     spec:
       containers:
+        {{- if $edgeProxy }}
+        - name: edge-proxy
+          image: {{ .Values.edgeProxy.image | default "nginx:1.27-alpine" | quote }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          volumeMounts:
+            - name: edge-proxy-nginx
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+        {{- end }}
         - name: keycloak
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - "start-dev"
+            {{- if $edgeProxy }}
+            - "--http-port=8081"
+            {{- else }}
             - "--http-port={{ .Values.service.port }}"
+            {{- end }}
             {{- if .Values.realm.import }}
             - "--import-realm"
             {{- end }}
           ports:
+            {{- if $edgeProxy }}
+            - name: backend
+              containerPort: 8081
+            {{- else }}
             - name: http
               containerPort: {{ .Values.service.port }}
+            {{- end }}
           env:
             - name: KEYCLOAK_ADMIN
               valueFrom:
@@ -53,9 +98,16 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      {{- if .Values.realm.import }}
+      {{- if or .Values.realm.import $edgeProxy }}
       volumes:
+        {{- if .Values.realm.import }}
         - name: realm-config
           configMap:
             name: {{ .Release.Name }}-keycloak-realm
+        {{- end }}
+        {{- if $edgeProxy }}
+        - name: edge-proxy-nginx
+          configMap:
+            name: {{ .Release.Name }}-keycloak-edge-proxy
+        {{- end }}
       {{- end }}

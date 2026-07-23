@@ -1,0 +1,44 @@
+{{- if .Values.cors.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-eudi-statuslist-cors
+  labels:
+    app.kubernetes.io/name: eudi-statuslist
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  default.conf: |
+    server {
+      listen 5000;
+      server_name _;
+
+      location / {
+        if ($request_method = OPTIONS) {
+          add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }};
+          add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }};
+          add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }};
+          add_header Access-Control-Max-Age 86400;
+          add_header Content-Length 0;
+          add_header Content-Type text/plain;
+          return 204;
+        }
+
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:5001;
+
+        # Upstream Flask may already emit CORS headers; replace with configured values.
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Vary;
+
+        add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }} always;
+        add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }} always;
+        add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }} always;
+      }
+    }
+{{- end }}

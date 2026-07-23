@@ -63,13 +63,54 @@ class SDJWTTest(unittest.TestCase):
         self.assertEqual(kb, "eyJ.kb.sig")
 
     def test_merge_disclosed_claims(self) -> None:
-        enc_org, _ = create_property_disclosure("organization", "Acme")
-        enc_roles, _ = create_property_disclosure("roles", ["Signer"])
-        payload = {"iss": "did:example", "sub": "did:holder", "_sd": ["x", "y"]}
+        enc_org, dig_org = create_property_disclosure("organization", "Acme")
+        enc_roles, dig_roles = create_property_disclosure("roles", ["Signer"])
+        payload = {"iss": "did:example", "sub": "did:holder", "_sd": [dig_org, dig_roles]}
         merged = merge_disclosed_claims(payload, [enc_org, enc_roles])
         self.assertEqual(merged["organization"], "Acme")
         self.assertEqual(merged["roles"], ["Signer"])
         self.assertNotIn("_sd", merged)
+
+    def test_merge_array_element_and_nested_sd(self) -> None:
+        from dcs_wallet.sdjwt import encode_disclosure, disclosure_digest
+
+        arr_disc = encode_disclosure(json.dumps(["salt-arr", "DE"], separators=(",", ":")))
+        arr_digest = disclosure_digest(arr_disc)
+
+        country_disc, country_digest = create_property_disclosure("country", "DE")
+        pob_value = {"_sd": [country_digest]}
+        pob_disc, pob_digest = create_property_disclosure("place_of_birth", pob_value)
+        nat_disc, nat_digest = create_property_disclosure(
+            "nationalities",
+            [{"...": arr_digest}],
+        )
+        given_disc, given_digest = create_property_disclosure("given_name", "Alice")
+
+        payload = {
+            "vct": "urn:eudi:pid:1",
+            "_sd": [given_digest, pob_digest, nat_digest],
+            "_sd_alg": "sha-256",
+        }
+        merged = merge_disclosed_claims(
+            payload,
+            [given_disc, pob_disc, country_disc, nat_disc, arr_disc],
+        )
+        self.assertEqual(merged["given_name"], "Alice")
+        self.assertEqual(merged["place_of_birth"], {"country": "DE"})
+        self.assertEqual(merged["nationalities"], ["DE"])
+        self.assertNotIn("_sd", merged)
+        self.assertNotIn("_sd_alg", merged)
+
+    def test_dependent_disclosures_includes_nested_array(self) -> None:
+        from dcs_wallet.sdjwt import dependent_disclosures, encode_disclosure, disclosure_digest
+
+        arr_disc = encode_disclosure(json.dumps(["salt-arr", "DE"], separators=(",", ":")))
+        arr_digest = disclosure_digest(arr_disc)
+        nat_disc, _ = create_property_disclosure("nationalities", [{"...": arr_digest}])
+        given_disc, _ = create_property_disclosure("given_name", "Alice")
+        all_disclosures = [given_disc, nat_disc, arr_disc]
+        selected = dependent_disclosures([nat_disc], all_disclosures)
+        self.assertEqual(selected, [nat_disc, arr_disc])
 
 
     def test_join_sd_jwt_without_kb_has_trailing_tilde(self) -> None:

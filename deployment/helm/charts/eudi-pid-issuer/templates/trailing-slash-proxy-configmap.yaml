@@ -1,0 +1,52 @@
+{{- $proxy := or .Values.trailingSlashRedirect.enabled .Values.cors.enabled }}
+{{- if $proxy }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-eudi-pid-issuer-trailing-slash
+  labels:
+    app.kubernetes.io/name: eudi-pid-issuer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      server_name _;
+
+      location / {
+        {{- if .Values.cors.enabled }}
+        if ($request_method = OPTIONS) {
+          add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }};
+          add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }};
+          add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }};
+          add_header Access-Control-Max-Age 86400;
+          add_header Content-Length 0;
+          add_header Content-Type text/plain;
+          return 204;
+        }
+        {{- end }}
+
+        {{- if .Values.trailingSlashRedirect.enabled }}
+        # Browsers often append "/"; issuer Security only permits the no-slash path.
+        rewrite ^(.+)/$ $1 break;
+        {{- end }}
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix "";
+        proxy_pass http://127.0.0.1:8081;
+
+        {{- if .Values.cors.enabled }}
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Vary;
+        add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }} always;
+        add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }} always;
+        add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }} always;
+        {{- end }}
+      }
+    }
+{{- end }}

@@ -116,16 +116,118 @@ def sd_hash(issuer_jwt: str, disclosures: list[str], *, sd_alg: str = DEFAULT_SD
     return b64url_encode(digest)
 
 
+def _is_array_element_placeholder(value: Any) -> bool:
+    return isinstance(value, dict) and set(value.keys()) == {"..."} and isinstance(value.get("..."), str)
+
+
 def merge_disclosed_claims(issuer_payload: dict[str, Any], disclosures: list[str]) -> dict[str, Any]:
-    claims = dict(issuer_payload)
-    claims.pop("_sd", None)
-    claims.pop("_sd_alg", None)
+    by_digest: dict[str, list[Any]] = {}
     for encoded in disclosures:
         arr = decode_disclosure(encoded)
-        if len(arr) != 3:
-            raise ValueError("property disclosure must be a three-element array")
-        claim_name = arr[1]
-        if not isinstance(claim_name, str) or not claim_name:
-            raise ValueError("disclosure claim name must be a non-empty string")
-        claims[claim_name] = arr[2]
+        if len(arr) not in (2, 3):
+            raise ValueError(
+                f"disclosure must be a 2-element (array) or 3-element (property) array, got length {len(arr)}"
+            )
+        if len(arr) == 3:
+            claim_name = arr[1]
+            if not isinstance(claim_name, str) or not claim_name:
+                raise ValueError("property disclosure claim name must be a non-empty string")
+        by_digest[disclosure_digest(encoded)] = arr
+
+    def resolve(node: Any) -> Any:
+        if isinstance(node, dict):
+            if _is_array_element_placeholder(node):
+                return node
+            out: dict[str, Any] = {}
+            for key, value in node.items():
+                if key in {"_sd", "_sd_alg"}:
+                    continue
+                out[key] = resolve(value)
+            raw_sd = node.get("_sd")
+            if isinstance(raw_sd, list):
+                for digest in raw_sd:
+                    if not isinstance(digest, str):
+                        continue
+                    arr = by_digest.get(digest)
+                    if arr is None or len(arr) != 3:
+                        continue
+                    out[str(arr[1])] = resolve(arr[2])
+            return out
+        if isinstance(node, list):
+            out_list: list[Any] = []
+            for item in node:
+                if _is_array_element_placeholder(item):
+                    arr = by_digest.get(str(item["..."]))
+                    if arr is not None and len(arr) == 2:
+                        out_list.append(resolve(arr[1]))
+                    else:
+                        out_list.append(item)
+                else:
+                    out_list.append(resolve(item))
+            return out_list
+        return node
+
+    claims = resolve(issuer_payload)
+    if not isinstance(claims, dict):
+        raise ValueError("issuer payload must resolve to an object")
+    claims.pop("_sd_alg", None)
     return claims
+
+
+def dependent_disclosures(
+    selected: list[str],
+    all_disclosures: list[str],
+    *,
+    sd_alg: str = DEFAULT_SD_ALG,
+) -> list[str]:
+    if not selected:
+        return selected
+
+    digest_to_encoded = {disclosure_digest(d, sd_alg=sd_alg): d for d in all_disclosures}
+    selected_set = set(selected)
+    queue = list(selected)
+
+    def enqueue_digest(digest: str) -> None:
+        encoded = digest_to_encoded.get(digest)
+        if encoded is None or encoded in selected_set:
+            return
+        selected_set.add(encoded)
+        queue.append(encoded)
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if _is_array_element_placeholder(node):
+                enqueue_digest(str(node["..."]))
+                return
+            raw_sd = node.get("_sd")
+            if isinstance(raw_sd, list):
+                for digest in raw_sd:
+                    if isinstance(digest, str):
+                        enqueue_digest(digest)
+            for key, value in node.items():
+                if key in {"_sd", "_sd_alg"}:
+                    continue
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    while queue:
+        encoded = queue.pop(0)
+        arr = decode_disclosure(encoded)
+        if len(arr) == 3:
+            walk(arr[2])
+        elif len(arr) == 2:
+            walk(arr[1])
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for encoded in selected:
+        if encoded in selected_set and encoded not in seen:
+            ordered.append(encoded)
+            seen.add(encoded)
+    for encoded in all_disclosures:
+        if encoded in selected_set and encoded not in seen:
+            ordered.append(encoded)
+            seen.add(encoded)
+    return ordered

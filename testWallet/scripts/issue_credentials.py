@@ -27,7 +27,7 @@ from dcs_wallet.issuer import (
     issue_stored_credential,
 )
 from dcs_wallet.keys import load_json, private_key_material, write_text
-from issue_pid_credentials import issue_pid_credentials
+from issue_pid_credentials import PID_HOLDER_USERNAMES, issue_pid_credentials
 
 
 def _load_private_keys(keys_dir: Path) -> tuple[dict, dict]:
@@ -93,6 +93,7 @@ def main() -> int:
                 issuer_did=args.issuer_did,
             )
             for name in args.credential
+            if (args.credentials_dir / f"{name}.template.json").is_file()
         ]
     else:
         paths = []
@@ -110,21 +111,30 @@ def main() -> int:
                 )
             )
 
-    if not paths:
-        raise FileNotFoundError(f"no role *.template.json files found in {args.credentials_dir}")
     for path in paths:
         print(f"issued: {path}")
 
-    pid_names = args.credential if args.credential else None
-    try:
-        for path in issue_pid_credentials(
-            credentials_dir=args.credentials_dir,
-            wallet_private_jwk=wallet_private,
-            credential_names=pid_names,
-        ):
-            print(f"issued: {path}")
-    except Exception as exc:
-        print(f"PID issuance skipped (network/EUDIPLO failure): {exc}")
+    if args.credential:
+        pid_names = [n for n in args.credential if n in PID_HOLDER_USERNAMES]
+    else:
+        pid_names = None
+
+    if args.credential and not pid_names and not paths:
+        raise FileNotFoundError(
+            f"nothing to issue for {args.credential!r} in {args.credentials_dir} "
+            f"(role templates or PID holders {sorted(PID_HOLDER_USERNAMES)})"
+        )
+
+    if pid_names is None or pid_names:
+        try:
+            for path in issue_pid_credentials(
+                credentials_dir=args.credentials_dir,
+                wallet_private_jwk=wallet_private,
+                credential_names=pid_names,
+            ):
+                print(f"issued: {path}")
+        except Exception as exc:
+            print(f"PID issuance skipped (local OID4VCI failure): {exc}")
     return 0
 
 

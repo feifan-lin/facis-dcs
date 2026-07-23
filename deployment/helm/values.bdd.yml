@@ -78,7 +78,7 @@ postgresql:
     username: dcs
     password: dcs
     database: dcs
-  additionalDatabases: ["fc", "hydra", "statuslist"]
+  additionalDatabases: ["fc", "hydra", "statuslist", "pid_issuer"]
   persistence:
     enabled: false
 
@@ -92,6 +92,23 @@ keycloak:
     adminPassword: admin
   realm:
     import: true
+    pidIssuer:
+      serviceClient:
+        secret: "bdd-pid-issuer-srv-secret"
+      holderClient:
+        redirectUris:
+          - http://127.0.0.1:8765/callback
+        webOrigins:
+          - http://127.0.0.1:8765
+  ingress:
+    enabled: true
+    className: traefik
+    host: localhost
+    path: /realms
+    pathType: Prefix
+    wellKnownPathRewrite:
+      enabled: true
+      pathSuffix: "realms/gaia-x"
   extraEnv:
     - name: KC_HOSTNAME
       value: "dcs-keycloak"
@@ -101,6 +118,8 @@ keycloak:
       value: "false"
     - name: KC_HTTP_ENABLED
       value: "true"
+    - name: KC_FEATURES
+      value: "dpop"
 
 nats:
   enabled: true
@@ -255,6 +274,69 @@ statuslistService:
     tenantIDs:
       - credential
       - c2pa
+
+# EUDI Token Status List — PID credentials.
+eudiStatuslist:
+  enabled: true
+  image:
+    pullPolicy: Never
+  publicURL: "http://localhost:18080/"
+  apiKey: "bdd-eudi-statuslist-api-key"
+  cors:
+    enabled: true
+    allowOrigin: "*"
+  persistence:
+    enabled: true
+  signing:
+    generate: true
+  ingress:
+    enabled: true
+    className: traefik
+    hosts:
+      - host: localhost
+        paths:
+          - path: /token_status_list
+            pathType: Prefix
+
+# EUDI PID Issuer.
+eudiPidIssuer:
+  enabled: true
+  publicURL: "http://localhost:18080/pid-issuer"
+  authorizationServer:
+    publicURL: "http://dcs-keycloak:8080/realms/gaia-x"
+    introspectionURL: "http://dcs-keycloak:8080/realms/gaia-x/protocol/openid-connect/token/introspect"
+  oauth:
+    clientId: "pid-issuer-srv"
+    clientSecret: "bdd-pid-issuer-srv-secret"
+  keycloak:
+    serverURL: "http://dcs-keycloak:8080"
+    authenticationRealm: "master"
+    clientId: "admin-cli"
+    username: "admin"
+    password: "admin"
+    userRealm: "gaia-x"
+  database:
+    url: "r2dbc:pool:postgresql://dcs-postgresql:5432/pid_issuer"
+    username: "dcs"
+    password: "dcs"
+    migrate: true
+  statusList:
+    generateURI: "http://dcs-eudi-statuslist:5000/token_status_list/take"
+    revokeURI: "http://dcs-eudi-statuslist:5000/token_status_list/set"
+    apiKey: "bdd-eudi-statuslist-api-key"
+  pid:
+    sdJwtVc:
+      targetVct: "urn:eudi:pid:1"
+  ingress:
+    enabled: true
+    className: traefik
+    wellKnownPathRewrite:
+      enabled: true
+    hosts:
+      - host: localhost
+        paths:
+          - path: /pid-issuer
+            pathType: Prefix
 
 statusListLocalhostProxy:
   enabled: true

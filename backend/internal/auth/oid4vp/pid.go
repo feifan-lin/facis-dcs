@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// PIDVCT is the German EUDI PID credential type.
-const PIDVCT = "urn:eudi:pid:de:1"
+// PIDVCT is the EUDI PID credential type.
+const PIDVCT = "urn:eudi:pid:1"
 
 // PlaygroundPIDVCT is returned by the EUDIPLO playground issuer when credentialId is "pid".
 const PlaygroundPIDVCT = "urn:eudi:eaa:loyalty-card:1"

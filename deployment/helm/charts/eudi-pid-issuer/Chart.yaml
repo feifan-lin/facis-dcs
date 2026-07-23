@@ -1,0 +1,6 @@
+apiVersion: v2
+name: eudi-pid-issuer
+description: EUDI PID Issuer (eudi-srv-pid-issuer) for internal SD-JWT PID issuance
+type: application
+version: 0.1.0
+home: https://github.com/eu-digital-identity-wallet/eudi-srv-pid-issuer

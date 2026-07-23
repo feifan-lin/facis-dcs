@@ -1,0 +1,79 @@
+{{- $edgeProxy := or .Values.wellKnownPathRewrite.enabled .Values.cors.enabled }}
+{{- if $edgeProxy }}
+{{- $suffix := trimAll "/" (.Values.wellKnownPathRewrite.pathSuffix | default "realms/gaia-x") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-keycloak-edge-proxy
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  default.conf: |
+    server {
+      listen {{ .Values.service.port | default 8080 }};
+      server_name _;
+
+      {{- if .Values.wellKnownPathRewrite.enabled }}
+      # RFC8414: /.well-known/<meta>/<realm-path> -> /<realm-path>/.well-known/<meta>
+      location ~ ^/\.well-known/(oauth-authorization-server|openid-configuration)/{{ $suffix }}/?$ {
+        {{- if .Values.cors.enabled }}
+        if ($request_method = OPTIONS) {
+          add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }};
+          add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }};
+          add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }};
+          add_header Access-Control-Max-Age 86400;
+          add_header Content-Length 0;
+          add_header Content-Type text/plain;
+          return 204;
+        }
+        {{- end }}
+        rewrite ^/\.well-known/(oauth-authorization-server|openid-configuration)/{{ $suffix }}/?$ /{{ $suffix }}/.well-known/$1 break;
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:8081;
+        {{- if .Values.cors.enabled }}
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Vary;
+        add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }} always;
+        add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }} always;
+        add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }} always;
+        {{- end }}
+      }
+      {{- end }}
+
+      location / {
+        {{- if .Values.cors.enabled }}
+        if ($request_method = OPTIONS) {
+          add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }};
+          add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }};
+          add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }};
+          add_header Access-Control-Max-Age 86400;
+          add_header Content-Length 0;
+          add_header Content-Type text/plain;
+          return 204;
+        }
+        {{- end }}
+        proxy_http_version 1.1;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://127.0.0.1:8081;
+        {{- if .Values.cors.enabled }}
+        proxy_hide_header Access-Control-Allow-Origin;
+        proxy_hide_header Access-Control-Allow-Methods;
+        proxy_hide_header Access-Control-Allow-Headers;
+        proxy_hide_header Access-Control-Allow-Credentials;
+        proxy_hide_header Vary;
+        add_header Access-Control-Allow-Origin {{ .Values.cors.allowOrigin | quote }} always;
+        add_header Access-Control-Allow-Methods {{ .Values.cors.allowMethods | quote }} always;
+        add_header Access-Control-Allow-Headers {{ .Values.cors.allowHeaders | quote }} always;
+        {{- end }}
+      }
+    }
+{{- end }}

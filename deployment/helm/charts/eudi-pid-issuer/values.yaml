@@ -1,0 +1,130 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/eu-digital-identity-wallet/eudi-srv-pid-issuer
+  tag: "v0.10.1"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+service:
+  type: ClusterIP
+  port: 8080
+  nodePort: null
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  pathType: Prefix
+  hosts: []
+  tls: []
+  wellKnownPathRewrite:
+    enabled: false
+    pathSuffix: ""
+
+# NodePort / no-Ingress: nginx in front strips a trailing "/" then proxies to the app.
+# Issuer Security only permits /.well-known/... without a trailing slash.
+trailingSlashRedirect:
+  enabled: false
+  image: "nginx:1.27-alpine"
+
+# Same nginx sidecar (when trailingSlashRedirect and/or cors enabled): browser wallet CORS.
+cors:
+  enabled: false
+  allowOrigin: "*"
+  allowMethods: "GET, POST, PUT, DELETE, OPTIONS"
+  allowHeaders: "*"
+
+basePath: "/pid-issuer"
+publicURL: "http://localhost:30880/pid-issuer"
+
+authorizationServer:
+  publicURL: "http://localhost:30080/realms/gaia-x"
+  introspectionURL: "http://dcs-keycloak:8080/realms/gaia-x/protocol/openid-connect/token/introspect"
+
+oauth:
+  clientId: "pid-issuer-srv"
+  clientSecret: ""
+
+keycloak:
+  serverURL: "http://dcs-keycloak:8080"
+  authenticationRealm: "master"
+  clientId: "admin-cli"
+  username: "admin"
+  password: "admin"
+  userRealm: "gaia-x"
+
+dpopRealm: "gaia-x"
+
+database:
+  url: "r2dbc:pool:postgresql://dcs-postgresql:5432/pid_issuer"
+  username: "dcs"
+  password: "dcs"
+  migrate: true
+
+statusList:
+  generateURI: "http://dcs-eudi-statuslist:5000/token_status_list/take"
+  revokeURI: "http://dcs-eudi-statuslist:5000/token_status_list/set"
+  apiKey: "dev-eudi-statuslist-api-key"
+
+# Empty existingSecret embeds files/issuer-dev.jks into the chart Secret.
+keystore:
+  existingSecret: ""
+  secretKey: "keystore"
+  type: "JKS"
+  password: "keyskeys"
+  aliases:
+    sdJwtSigning: "issuance"
+    sdJwtSigningPassword: "keyskeys"
+    requestEncryption: "request-encryption"
+    requestEncryptionPassword: "keyskeys"
+    nonceEncryption: "nonce-encryption"
+    nonceEncryptionPassword: "keyskeys"
+    accessCertificate: "access-certificate"
+    accessCertificatePassword: "keyskeys"
+
+pid:
+  sdJwtVc:
+    enabled: true
+    # EUDI Kotlin Duration rejects P4Y; ~4y ≈ P1461D.
+    duration: "P1461D"
+    targetVct: "urn:eudi:pid:1"
+    keyAttestationsRequired: false
+    reusePolicy:
+      enabled: true
+      type: "ArfAnnex2"
+      options:
+        - details: "once_only"
+          batchSize: "2"
+          reissueTriggerUnused: "1"
+  msoMdoc:
+    enabled: false
+  mdl:
+    enabled: false
+  learningCredential:
+    enabled: false
+
+# Must be >= pid.sdJwtVc.duration.
+preferredClientStatusPeriod: "P1461D"
+
+springProfiles: "insecure"
+
+credentialEncryption:
+  requestSupported: false
+  requestRequired: false
+  responseSupported: false
+  responseRequired: false
+
+# OID4VCI Credential Offer deep-link scheme (OpenID4VCI common default).
+credentialOffer:
+  defaultUri: "openid-credential-offer://"
+  allowedSchemes: "https,openid-credential-offer,eu-eaa-offer"
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

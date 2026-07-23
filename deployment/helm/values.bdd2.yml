@@ -152,6 +152,13 @@ statuslistService:
   url: "http://dcs-statuslist-service:8080"
   tenantID: c2pa
 
+# EUDI PID Status List + PID Issuer are shared with instance A.
+eudiStatuslist:
+  enabled: false
+
+eudiPidIssuer:
+  enabled: false
+
 # Same loopback proxy as instance A (values.bdd.yml): status list credential
 # IDs embedded by the shared Status List Service are public-origin URLs
 # (http://localhost:18080/statuslist/..., host-agnostic per instance A's

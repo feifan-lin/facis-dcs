@@ -32,11 +32,17 @@ dependencies:
 - name: statuslist-service
   repository: file://charts/statuslist-service
   version: 0.1.0
+- name: eudi-statuslist
+  repository: file://charts/eudi-statuslist
+  version: 0.1.0
+- name: eudi-pid-issuer
+  repository: file://charts/eudi-pid-issuer
+  version: 0.1.0
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 85.2.0
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 41.0.0
-digest: sha256:f1590ae201fcab7adf52390c94a730559bcdbe14672bf3e470918367243c2be7
-generated: "2026-07-14T17:47:10.915206287+02:00"
+digest: sha256:14c78ca532b6d0f032867838beb92d26383395f7cef34f8dc6caac17a6062a63
+generated: "2026-07-23T10:09:48.969704+02:00"

@@ -1,0 +1,55 @@
+{{- if and .Values.ingress.enabled .Values.ingress.wellKnownPathRewrite.enabled }}
+{{- $suffix := trimPrefix "/" (.Values.ingress.wellKnownPathRewrite.pathSuffix | default (trimPrefix "/" (.Values.basePath | default "/pid-issuer"))) }}
+{{- $ns := .Release.Namespace | default "default" }}
+{{/*
+Separate Ingress so only RFC-style well-known URLs hit the rewrite middleware;
+/pid-issuer traffic stays on the main Ingress unchanged.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-eudi-pid-issuer-well-known
+  labels:
+    app.kubernetes.io/name: eudi-pid-issuer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ printf "%s-%s-eudi-pid-issuer-well-known-rewrite@kubernetescrd" $ns .Release.Name | quote }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- toYaml .Values.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /.well-known/openid-credential-issuer/{{ $suffix }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $.Release.Name }}-eudi-pid-issuer
+                port:
+                  number: {{ $.Values.service.port | default 8080 }}
+          - path: /.well-known/oauth-protected-resource/{{ $suffix }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $.Release.Name }}-eudi-pid-issuer
+                port:
+                  number: {{ $.Values.service.port | default 8080 }}
+          - path: /.well-known/jwt-vc-issuer/{{ $suffix }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ $.Release.Name }}-eudi-pid-issuer
+                port:
+                  number: {{ $.Values.service.port | default 8080 }}
+    {{- end }}
+{{- end }}

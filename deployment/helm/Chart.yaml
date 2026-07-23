@@ -54,6 +54,16 @@ dependencies:
     repository: "file://charts/statuslist-service"
     condition: statuslistService.enabled
     alias: statuslistService
+  - name: eudi-statuslist
+    version: "0.1.0"
+    repository: "file://charts/eudi-statuslist"
+    condition: eudiStatuslist.enabled
+    alias: eudiStatuslist
+  - name: eudi-pid-issuer
+    version: "0.1.0"
+    repository: "file://charts/eudi-pid-issuer"
+    condition: eudiPidIssuer.enabled
+    alias: eudiPidIssuer
   - name: kube-prometheus-stack
     version: "85.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"

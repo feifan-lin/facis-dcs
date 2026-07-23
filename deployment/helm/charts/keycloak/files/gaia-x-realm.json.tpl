@@ -22,6 +22,10 @@
       {
         "name": "default-roles-gaia-x",
         "description": "${role_default-roles}"
+      },
+      {
+        "name": "eid-holder-natural-person",
+        "description": "A natural person allowed to request a PID credential"
       }
     ],
     "client": {
@@ -70,6 +74,14 @@
       ]
     }
   },
+  "scopeMappings": [
+    {
+      "clientScope": "eu.europa.ec.eudi.pid_vc_sd_jwt",
+      "roles": [
+        "eid-holder-natural-person"
+      ]
+    }
+  ],
   "users": [
     {
       "username": "service-account-federated-catalogue",
@@ -143,15 +155,34 @@
       "emailVerified": true,
       "firstName": "John",
       "lastName": "Doe",
+      "attributes": {
+        "birthdate": ["1985-03-14"],
+        "gender": ["1"],
+        "gender_as_string": ["male"],
+        "street": ["Hauptstrasse"],
+        "address_house_number": ["21"],
+        "locality": ["Cologne"],
+        "region": ["North Rhine-Westphalia"],
+        "postal_code": ["50667"],
+        "country": ["DE"],
+        "birth_country": ["DE"],
+        "birth_city": ["Cologne"],
+        "birth_place": ["Cologne"],
+        "nationality": ["DE"],
+        "birth_family_name": ["Doe"],
+        "birth_given_name": ["John"],
+        "personal_administrative_number": ["DE-PID-TEST-JOHN"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "johndoe",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -169,15 +200,34 @@
       "emailVerified": true,
       "firstName": "Jane",
       "lastName": "Smith",
+      "attributes": {
+        "birthdate": ["1990-09-08"],
+        "gender": ["2"],
+        "gender_as_string": ["female"],
+        "street": ["Koenigstrasse"],
+        "address_house_number": ["5"],
+        "locality": ["Stuttgart"],
+        "region": ["Baden-Wuerttemberg"],
+        "postal_code": ["70173"],
+        "country": ["DE"],
+        "birth_country": ["DE"],
+        "birth_city": ["Stuttgart"],
+        "birth_place": ["Stuttgart"],
+        "nationality": ["DE"],
+        "birth_family_name": ["Smith"],
+        "birth_given_name": ["Jane"],
+        "personal_administrative_number": ["DE-PID-TEST-JANE"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "janesmith",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -195,15 +245,34 @@
       "emailVerified": true,
       "firstName": "Bob",
       "lastName": "Johnson",
+      "attributes": {
+        "birthdate": ["1989-11-02"],
+        "gender": ["1"],
+        "gender_as_string": ["male"],
+        "street": ["Altonaer Strasse"],
+        "address_house_number": ["44"],
+        "locality": ["Hamburg"],
+        "region": ["Hamburg"],
+        "postal_code": ["22767"],
+        "country": ["DE"],
+        "birth_country": ["DE"],
+        "birth_city": ["Hamburg"],
+        "birth_place": ["Hamburg"],
+        "nationality": ["DE"],
+        "birth_family_name": ["Johnson"],
+        "birth_given_name": ["Bob"],
+        "personal_administrative_number": ["DE-PID-TEST-BOB"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "bobjohnson",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -219,17 +288,36 @@
       "enabled": true,
       "email": "alicewilliams@gaia-x.local",
       "emailVerified": true,
-      "firstName": "Allice",
+      "firstName": "Alice",
       "lastName": "Williams",
+      "attributes": {
+        "birthdate": ["1992-04-17"],
+        "gender": ["2"],
+        "gender_as_string": ["female"],
+        "street": ["Rheinstrasse"],
+        "address_house_number": ["12"],
+        "locality": ["Berlin"],
+        "region": ["Berlin"],
+        "postal_code": ["12159"],
+        "country": ["DE"],
+        "birth_country": ["DE"],
+        "birth_city": ["Berlin"],
+        "birth_place": ["Berlin"],
+        "nationality": ["DE"],
+        "birth_family_name": ["Williams"],
+        "birth_given_name": ["Alice"],
+        "personal_administrative_number": ["DE-PID-TEST-ALICE"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "alicewilliams",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -247,15 +335,34 @@
       "emailVerified": true,
       "firstName": "Charlie",
       "lastName": "Brown",
+      "attributes": {
+        "birthdate": ["1996-06-23"],
+        "gender": ["1"],
+        "gender_as_string": ["male"],
+        "street": ["Maximilianstrasse"],
+        "address_house_number": ["8"],
+        "locality": ["Munich"],
+        "region": ["Bavaria"],
+        "postal_code": ["80539"],
+        "country": ["DE"],
+        "birth_country": ["DE"],
+        "birth_city": ["Munich"],
+        "birth_place": ["Munich"],
+        "nationality": ["DE"],
+        "birth_family_name": ["Brown"],
+        "birth_given_name": ["Charlie"],
+        "personal_administrative_number": ["DE-PID-TEST-CHARLIE"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "charliebrown",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -273,15 +380,34 @@
       "emailVerified": true,
       "firstName": "Saoirse",
       "lastName": "Conrad",
+      "attributes": {
+        "birthdate": ["1994-12-01"],
+        "gender": ["2"],
+        "gender_as_string": ["female"],
+        "street": ["Friedrichstrasse"],
+        "address_house_number": ["100"],
+        "locality": ["Frankfurt"],
+        "region": ["Hesse"],
+        "postal_code": ["60311"],
+        "country": ["DE"],
+        "birth_country": ["IE"],
+        "birth_city": ["Dublin"],
+        "birth_place": ["Dublin"],
+        "nationality": ["IE"],
+        "birth_family_name": ["Conrad"],
+        "birth_given_name": ["Saoirse"],
+        "personal_administrative_number": ["DE-PID-TEST-SAOIRSE"]
+      },
       "credentials": [
         {
           "type": "password",
-          "value": "test",
+          "value": "saoirseconrad",
           "temporary": false
         }
       ],
       "realmRoles": [
-        "default-roles-gaia-x"
+        "default-roles-gaia-x",
+        "eid-holder-natural-person"
       ],
       "clientRoles": {
         "federated-catalogue": [
@@ -439,6 +565,61 @@
       ],
       "optionalClientScopes": [
         "offline_access"
+      ]
+    },
+    {
+      "clientId": "pid-issuer-srv",
+      "name": "PID Issuer service",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": {{ required "realm.pidIssuer.serviceClient.secret is required when realm.import=true" .Values.realm.pidIssuer.serviceClient.secret | quote }},
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "allow.token.introspection.without.audience.check": "true"
+      }
+    },
+    {
+      "clientId": "pid-holder-python",
+      "name": "Python OpenID4VCI holder",
+      "enabled": true,
+      "redirectUris": {{ toJson .Values.realm.pidIssuer.holderClient.redirectUris }},
+      "webOrigins": {{ toJson .Values.realm.pidIssuer.holderClient.webOrigins }},
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "dpop.bound.access.tokens": "true",
+        "access.token.signed.response.alg": "ES256",
+        "id.token.signed.response.alg": "ES256"
+      },
+      "defaultClientScopes": [
+        "web-origins"
+      ],
+      "optionalClientScopes": [
+        "eu.europa.ec.eudi.pid_vc_sd_jwt"
+      ],
+      "protocolMappers": [
+        {
+          "name": "client_status",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "client_status",
+            "jsonType.label": "JSON",
+            "claim.value": "{\"status\":{\"status_list\":{\"uri\":\"http://localhost:30822/wia-statuslists/dev-smoke\",\"idx\":0}},\"exp\":1957609682}",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false",
+            "access.tokenResponse.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
       ]
     }
   ],
@@ -620,6 +801,13 @@
     },
     {
       "name": "self-description",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      }
+    },
+    {
+      "name": "eu.europa.ec.eudi.pid_vc_sd_jwt",
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"

@@ -24,6 +24,24 @@ ingress:
   path: "/"
   pathType: Prefix
   tls: []
+  # Traefik: /.well-known/<meta>/realms/gaia-x -> /realms/gaia-x/.well-known/<meta>
+  wellKnownPathRewrite:
+    enabled: false
+    pathSuffix: "realms/gaia-x"
+
+# NodePort: nginx in front rewrites RFC8414 AS discovery URLs onto Keycloak paths.
+wellKnownPathRewrite:
+  enabled: false
+  pathSuffix: "realms/gaia-x"
+
+cors:
+  enabled: false
+  allowOrigin: "*"
+  allowMethods: "GET, POST, PUT, DELETE, OPTIONS"
+  allowHeaders: "*"
+
+edgeProxy:
+  image: "nginx:1.27-alpine"
 
 auth:
   adminUser: admin
@@ -40,5 +58,14 @@ realm:
       - "*"
     webOrigins:
       - "*"
+  # EUDI SD-JWT PID issuance.
+  pidIssuer:
+    serviceClient:
+      secret: ""
+    holderClient:
+      redirectUris:
+        - http://127.0.0.1:8765/callback
+      webOrigins:
+        - http://127.0.0.1:8765
 
 resources: {}

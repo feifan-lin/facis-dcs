@@ -21,7 +21,9 @@
 #   Neo4j Bolt       : localhost:32287
 #   FC service       : localhost:31081
 #   ORCE             : localhost:31188
-#   Status List Service : localhost:30221  (XFSC status list management)
+#   Status List Service : localhost:30221  (XFSC status list)
+#   EUDI Status List    : localhost:30822
+#   EUDI PID Issuer     : localhost:30880
 #   IPFS Gateway: localhost:31486
 #   IPFS API    : localhost:31512
 #
@@ -74,6 +76,14 @@ keycloak:
     adminPassword: admin
   realm:
     import: true
+    pidIssuer:
+      serviceClient:
+        secret: "dev-pid-issuer-srv-secret"
+      holderClient:
+        redirectUris:
+          - http://127.0.0.1:8765/callback
+        webOrigins:
+          - http://127.0.0.1:8765
   extraEnv:
     - name: KC_HOSTNAME
       value: "localhost"
@@ -83,6 +93,8 @@ keycloak:
       value: "false"
     - name: KC_HTTP_ENABLED
       value: "true"
+    - name: KC_FEATURES
+      value: "dpop"
 
 hydra:
   enabled: true
@@ -181,6 +193,12 @@ statuslistService:
     sslMode: "disable"
   nats:
     url: "nats://dcs2-nats:4222"
+
+eudiStatuslist:
+  enabled: false
+
+eudiPidIssuer:
+  enabled: false
 
 orce:
   enabled: true

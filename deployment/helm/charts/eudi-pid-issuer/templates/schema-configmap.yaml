@@ -1,0 +1,12 @@
+{{- if .Values.database.migrate }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-eudi-pid-issuer-schema
+  labels:
+    app.kubernetes.io/name: eudi-pid-issuer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  V1.sql: |-
+{{ .Files.Get "files/V1.sql" | indent 4 }}
+{{- end }}
