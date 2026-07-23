@@ -24,6 +24,7 @@ import {
   submitReviewApproveTemplateOn,
   verifyArtifact,
 } from './multi-dcs-helpers'
+import { E2E_PID_JWT_A, E2E_PID_JWT_B } from './pid-credentials'
 import { E2E_FRONTEND_ORIGIN } from '../playwright.config'
 
 /**
@@ -211,7 +212,7 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
   // double-signed artifact CONVERGES on both: two AcroForm sigs, banner active,
   // veraPDF PDF/A-3a PASS, c2patool valid, DSS validates both as AES + PAdES-B-T.
   await test.step('Stage 8 [DCS-IR-SM-03, DCS-IR-SI-04, ADR-12]: both sign; double-signed artifact verifies', async () => {
-    await signOnInstance(a, contractDid, 'Instance A Signatory')
+    await signOnInstance(a, contractDid, 'Instance A Signatory', E2E_PID_JWT_A)
     // A's signature ships to B, but only the ARTIFACT replicates: the intrinsic
     // state is each instance's own RBAC progress, which a re-ship deliberately
     // does not clobber, so B stays APPROVED until B itself signs. What must be
@@ -219,7 +220,7 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
     bChain = await assertManifestChainGrew(b, contractDid, bChain)
     await saveArtifact(a, contractDid, '08-signed-A')
     await saveArtifact(b, contractDid, '08-signed-B')
-    await signOnInstance(b, contractDid, 'Instance B Signatory')
+    await signOnInstance(b, contractDid, 'Instance B Signatory', E2E_PID_JWT_B)
     await assertReceivedInState(a, contractDid, 'SIGNED')
     await assertReceivedInState(b, contractDid, 'SIGNED')
     await verifyArtifact(a, contractDid, { lifecycle: 'active', save: '09-double-signed-A' })

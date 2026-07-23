@@ -81,7 +81,15 @@ export async function openInstanceB(browser: Browser): Promise<Instance> {
  * via the DSS SCA, upload it, and confirm SIGNED. The signature field is the
  * signing party's own DCS DID slot; the wallet discovers it from the PDF.
  */
-export async function signOnInstance(inst: Instance, contractDid: string, signatory: string): Promise<void> {
+export async function signOnInstance(
+  inst: Instance,
+  contractDid: string,
+  signatory: string,
+  pidJwtPath: string,
+): Promise<void> {
+  if (!pidJwtPath?.trim()) {
+    throw new Error('signOnInstance requires pidJwtPath (pre-issued EUDI PID SD-JWT)')
+  }
   await inst.gotoAs('Contract Signer', '/ui/signing')
   const row = inst.page.getByRole('row').filter({ hasText: contractDid })
   await expect(row).toBeVisible()
@@ -138,7 +146,7 @@ export async function signOnInstance(inst: Instance, contractDid: string, signat
   const signField = ceremonyStart.field_name?.trim() ?? ''
   expect(signField, 'ceremony start must bind a signature field_name').toBeTruthy()
 
-  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri], {
+  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri, '--pid-jwt', pidJwtPath], {
     cwd: repoRoot,
     env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: inst.apiBase },
     stdio: 'pipe',

@@ -140,11 +140,16 @@ spec:
           {{- if .Values.signing.existingSecret }}
           secret:
             secretName: {{ .Values.signing.existingSecret }}
-          {{- else if and .Values.persistence.enabled .Values.signing.generate }}
+          {{- else if .Values.signing.generate }}
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ .Release.Name }}-eudi-statuslist-certs
           {{- else }}
           emptyDir: {}
+          {{- end }}
+          {{- else }}
+          secret:
+            secretName: {{ .Release.Name }}-eudi-statuslist-signing
           {{- end }}
         - name: data
           {{- if .Values.persistence.enabled }}

@@ -215,7 +215,7 @@ eudiStatuslist:
   persistence:
     enabled: true
   signing:
-    generate: true
+    generate: false
 
 # EUDI PID Issuer.
 eudiPidIssuer:

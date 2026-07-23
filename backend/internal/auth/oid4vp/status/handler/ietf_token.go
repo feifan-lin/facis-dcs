@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/auth/oid4vp/status"
@@ -53,7 +54,7 @@ func (h *IETFToken) Check(
 	var claims map[string]any
 	switch contentType {
 	case "application/statuslist+jwt":
-		verified, err := h.verifyJWT(body)
+		verified, err := h.verifyJWT(body, ref.URI)
 		if err != nil {
 			return status.Result{}, status.ErrStatusSignature
 		}
@@ -126,12 +127,25 @@ func (h *IETFToken) decodeIETFList(lst any, contentType string) ([]byte, error) 
 	return codec.DecodeBase64URL(raw)
 }
 
-func (h *IETFToken) verifyJWT(body []byte) (envelope.VerifiedJWT, error) {
+func (h *IETFToken) verifyJWT(body []byte, statusListURI string) (envelope.VerifiedJWT, error) {
 	if err := requireStatusTrust(h.Trust); err != nil {
 		return envelope.VerifiedJWT{}, err
 	}
-	return envelope.VerifyES256JWT(body, func(issuer string, _ *jwt.Token) (*ecdsa.PublicKey, error) {
-		return h.Trust.ResolveECDSAPublicKey(issuer)
+	return envelope.VerifyES256JWT(body, func(issuer string, token *jwt.Token) (*ecdsa.PublicKey, error) {
+		if strings.TrimSpace(issuer) != "" {
+			return h.Trust.ResolveECDSAPublicKey(issuer)
+		}
+
+		pub, err := envelope.ECDSAPublicKeyFromJWTX5C(token)
+		if err != nil {
+			return nil, fmt.Errorf("status list jwt missing iss and usable x5c: %w", err)
+		}
+
+		if !h.Trust.ContainsECDSAPublicKeyForStatusListURI(statusListURI, pub) {
+			return nil, fmt.Errorf("status list x5c key is not trusted for %q", statusListURI)
+		}
+
+		return pub, nil
 	})
 }
 

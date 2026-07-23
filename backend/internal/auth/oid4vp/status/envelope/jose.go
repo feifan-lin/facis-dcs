@@ -26,11 +26,7 @@ func VerifyES256JWT(raw []byte, resolveKey func(issuer string, token *jwt.Token)
 		if !ok {
 			return nil, fmt.Errorf("invalid jwt claims")
 		}
-		issuer := tokenIssuer(claims)
-		if issuer == "" {
-			return nil, fmt.Errorf("jwt missing iss or issuer claim")
-		}
-		return resolveKey(issuer, t)
+		return resolveKey(tokenIssuer(claims), t)
 	})
 	if err != nil {
 		return VerifiedJWT{}, fmt.Errorf("jwt verification failed: %w", err)

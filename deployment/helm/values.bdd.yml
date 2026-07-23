@@ -288,7 +288,7 @@ eudiStatuslist:
   persistence:
     enabled: true
   signing:
-    generate: true
+    generate: false
   ingress:
     enabled: true
     className: traefik

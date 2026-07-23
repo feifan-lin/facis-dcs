@@ -1,20 +1,24 @@
-"""Wallet leg of the signing ceremony: builds the PID and PoA SD-JWT VC + KB-JWT
-presentation the way the real wallet does and delivers it over OpenID4VP
-direct_post (JAR from request_uri → vp_token to response_uri). Self-contained —
-it uses the same testWallet/dcs_wallet signing primitives AuthService uses for
-the OID4VP login, without importing the behave step modules (which pull in the
-bdd-executor runtime).
+"""Wallet leg of the signing ceremony: presents a pre-issued EUDI PID SD-JWT plus
+a PoA SD-JWT over OpenID4VP direct_post.
 
-Usage: python3 complete_signing_webhook.py <openid4vp://... | request_uri>
-Env:   STATUSLIST_SERVICE_URL, BDD_DCS_BASE_URL
+The PID must already exist. This helper only attaches a fresh KB-JWT for the
+ceremony nonce/aud.
+
+Usage:
+  python3 complete_signing_webhook.py <openid4vp://... | request_uri> --pid-jwt PATH
+  E2E_PID_JWT=PATH python3 complete_signing_webhook.py <openid4vp://...>
+
+Env: STATUSLIST_SERVICE_URL, BDD_DCS_BASE_URL, E2E_PID_JWT
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
 import time
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -48,58 +52,68 @@ def resolve_request_uri(pasted: str) -> str:
     raise ValueError(f"unsupported presentation URL: {pasted[:80]}")
 
 
-def build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str):
+def load_pid_sd_jwt(path: Path) -> str:
+    raw = path.read_text(encoding="utf-8").strip()
+    if not raw.startswith("eyJ"):
+        raise ValueError(f"{path} must contain an SD-JWT (got {raw[:32]!r})")
+    return raw
+
+
+def wait_until_pid_nbf(sd_jwt: str, *, skew_seconds: float = 1.0) -> None:
+    """EUDI pid-issuer sets nbf = iat + ~20s; presenting earlier fails verification."""
     AuthService._ensure_dcs_wallet_importable()
-    from dcs_wallet.issuer import DEFAULT_ISSUER_DID, sign_credential_sd_jwt, sign_key_binding_jwt
-    from dcs_wallet.keys import cnf_jwk, did_jwk_from_public_jwk, public_jwk
-    from dcs_wallet.sdjwt import join_sd_jwt, split_sd_jwt
+    from dcs_wallet.credential import decode_jwt_payload
+    from dcs_wallet.sdjwt import split_sd_jwt
 
-    keys = AuthService.load_wallet_keys()
-    holder_key = keys.wallet_private
-    holder_public = public_jwk(holder_key)
-    subject_did = did_jwk_from_public_jwk(holder_public)
+    issuer_jwt, _, _ = split_sd_jwt(sd_jwt)
+    claims = decode_jwt_payload(issuer_jwt)
+    nbf = claims.get("nbf")
+    if nbf is None:
+        return
+    nbf_ts = float(nbf)
+    delay = nbf_ts + skew_seconds - time.time()
+    if delay > 0:
+        time.sleep(delay)
 
-    now = int(time.time())
-    issued = sign_credential_sd_jwt(
-        visible_claims={
-            "iss": DEFAULT_ISSUER_DID,
-            "sub": subject_did,
-            "vct": "urn:eudi:pid:1",
-            "iat": now - 3600,
-            "exp": now + 3600,
-            "cnf": {"jwk": cnf_jwk(holder_public)},
-        },
-        selective_claims={"given_name": given_name, "family_name": family_name},
-        issuer_private=keys.issuer_private,
-    )
-    issuer_jwt, disclosures, _ = split_sd_jwt(issued)
-    kb_jwt = sign_key_binding_jwt(
-        issuer_jwt=issuer_jwt,
-        disclosures=disclosures,
-        wallet_private=holder_key,
-        aud=aud,
-        nonce=nonce,
-    )
-    return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)
+
+def present_eudi_pid(*, sd_jwt: str, aud: str, nonce: str) -> str:
+    AuthService._ensure_dcs_wallet_importable()
+    from dcs_wallet.presentation import build_vp_token_from_sd_jwt
+
+    return build_vp_token_from_sd_jwt(sd_jwt, nonce=nonce, client_id=aud)
 
 
 def main() -> None:
-    wallet_uri = sys.argv[1]
-    base_url = os.environ["BDD_DCS_BASE_URL"].rstrip("/")
-    # The organization the wallet's Power of Attorney authorizes it to act for.
-    # One org runs one DCS, so that organization is the signing org's own DID,
-    # resolved from its did:web document — the same public DID trust anchor the
-    # testWallet self-issues under and every peer resolves against.
-    poa_organization = requests.get(did_document_url(base_url), timeout=30).json()["id"]
-    given_name, family_name = "E2E Vertical Signer", "E2E-Testperson"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("wallet_uri", help="openid4vp://... or request_uri URL")
+    parser.add_argument(
+        "--pid-jwt",
+        dest="pid_jwt",
+        default=os.environ.get("E2E_PID_JWT", "").strip(),
+        help="Path to a pre-issued EUDI PID SD-JWT (or set E2E_PID_JWT)",
+    )
+    args = parser.parse_args()
+    if not args.pid_jwt:
+        raise SystemExit(
+            "EUDI PID SD-JWT required: pass --pid-jwt PATH or set E2E_PID_JWT "
+            "(issue via testWallet/scripts/issue_pid_credentials.py against the local pid-issuer)"
+        )
 
-    request_uri = resolve_request_uri(wallet_uri)
+    pid_path = Path(args.pid_jwt).expanduser().resolve()
+    if not pid_path.is_file():
+        raise SystemExit(f"PID JWT not found: {pid_path}")
+
+    base_url = os.environ["BDD_DCS_BASE_URL"].rstrip("/")
+    poa_organization = requests.get(did_document_url(base_url), timeout=30).json()["id"]
+
+    request_uri = resolve_request_uri(args.wallet_uri)
     session = requests.Session()
     auth_request = AuthService.fetch_authorization_request(session, request_uri, timeout=60)
 
-    pid_vp = build_pid_presentation(
-        given_name=given_name,
-        family_name=family_name,
+    pid_sd_jwt = load_pid_sd_jwt(pid_path)
+    wait_until_pid_nbf(pid_sd_jwt)
+    pid_vp = present_eudi_pid(
+        sd_jwt=pid_sd_jwt,
         aud=auth_request.client_id,
         nonce=auth_request.nonce,
     )
@@ -124,6 +138,7 @@ def main() -> None:
         # alone reports only the code, which says nothing about the mismatch.
         raise SystemExit(
             f"direct_post {response.status_code} for {auth_request.response_uri}\n"
+            f"  pid_jwt={pid_path}\n"
             f"  presented poa_organization={poa_organization!r}\n"
             f"  response: {response.text[:600]}"
         )

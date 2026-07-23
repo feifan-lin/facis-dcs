@@ -7,7 +7,7 @@ from typing import Any
 import jwt
 from jwt.algorithms import ECAlgorithm
 
-from dcs_wallet.credential import decode_jwt_payload, load_credential_claims, load_credential_sd_jwt
+from dcs_wallet.credential import decode_jwt_payload, load_credential_sd_jwt
 from dcs_wallet.sdjwt import (
     KB_JWT_TYP,
     DEFAULT_SD_ALG,
@@ -16,6 +16,7 @@ from dcs_wallet.sdjwt import (
     dependent_disclosures,
     disclosure_digest,
     join_sd_jwt,
+    merge_disclosed_claims,
     sd_hash,
     split_sd_jwt,
 )
@@ -181,15 +182,15 @@ def _select_disclosures(
     return dependent_disclosures(top_level, all_disclosures, sd_alg=sd_alg)
 
 
-def build_vp_token(
+def build_vp_token_from_sd_jwt(
+    raw_credential: str,
     *,
-    credential_name: str,
     nonce: str,
     client_id: str = "",
     requested_claim_paths: list[list[str]] | None = None,
+    wallet_jwk: dict[str, Any] | None = None,
 ) -> str:
-    """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
-    raw_credential = load_credential_sd_jwt(credential_name)
+    """Attach a fresh KB-JWT to an already-issued SD-JWT credential string."""
     issuer_jwt, disclosures, _stored_kb = split_sd_jwt(raw_credential)
     issuer_payload = decode_jwt_payload(issuer_jwt)
     sd_alg = str(issuer_payload.get("_sd_alg") or DEFAULT_SD_ALG)
@@ -200,17 +201,32 @@ def build_vp_token(
         requested_claim_paths=requested_claim_paths,
     )
 
-    credential_claims = load_credential_claims(credential_name)
-    wallet_jwk = load_jwk("wallet.jwk")
-
-    _assert_holder_binding_matches_credential(credential_claims=credential_claims, wallet_jwk=wallet_jwk)
+    credential_claims = merge_disclosed_claims(issuer_payload, disclosures)
+    holder_jwk = wallet_jwk if wallet_jwk is not None else load_jwk("wallet.jwk")
+    _assert_holder_binding_matches_credential(credential_claims=credential_claims, wallet_jwk=holder_jwk)
 
     kb_jwt = build_kb_jwt(
         issuer_jwt=issuer_jwt,
         disclosures=disclosures,
         nonce=nonce,
         aud=client_id,
-        wallet_jwk=wallet_jwk,
+        wallet_jwk=holder_jwk,
         sd_alg=sd_alg,
     )
     return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)
+
+
+def build_vp_token(
+    *,
+    credential_name: str,
+    nonce: str,
+    client_id: str = "",
+    requested_claim_paths: list[list[str]] | None = None,
+) -> str:
+    """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
+    return build_vp_token_from_sd_jwt(
+        load_credential_sd_jwt(credential_name),
+        nonce=nonce,
+        client_id=client_id,
+        requested_claim_paths=requested_claim_paths,
+    )

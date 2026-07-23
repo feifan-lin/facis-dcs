@@ -40,7 +40,7 @@ publicURL: "http://localhost:30822/"
 apiKey: "dev-eudi-statuslist-api-key"
 
 signing:
-  generate: true
+  generate: false
   existingSecret: ""
 
 resources:

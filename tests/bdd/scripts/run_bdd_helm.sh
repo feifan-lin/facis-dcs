@@ -439,10 +439,18 @@ fi
 #                   signing helpers), so the frontend E2E gets the same live
 #                   two-instance stack + DSS forward the BDD suite uses.
 if [[ "${RUN_MODE:-bdd}" == "e2e" ]]; then
+  echo "Issuing EUDI PID SD-JWTs for Playwright signing ceremonies"
+  E2E_BDD_PYTHON="$VENV_PATH/bin/python3" \
+  BDD_PUBLIC_ORIGIN="${BDD_PUBLIC_ORIGIN}" \
+    bash "$PWD/scripts/issue_eudi_pids_for_e2e.sh"
+  # shellcheck disable=SC1091
+  source "$PWD/.tmp/e2e-pid.env"
   echo "Running Playwright E2E against the deployed stack"
   cd "$PROJECT_ROOT/frontend/ClientApp"
   E2E_DCS_API_BASE="${BDD_PUBLIC_ORIGIN}/digital-contracting-service/api" \
   E2E_BDD_PYTHON="$VENV_PATH/bin/python3" \
+  E2E_PID_JWT_A="${E2E_PID_JWT_A}" \
+  E2E_PID_JWT_B="${E2E_PID_JWT_B}" \
     npm run e2e
 else
   echo "Running BDD suite via bdd-executor environment"

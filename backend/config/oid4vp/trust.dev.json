@@ -65,6 +65,36 @@
           }
         ]
       }
+    },
+    "http://localhost:30822": {
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "vWCtWe8hO27NjYntkvsZss8681QgWIRttRYW9ZbPeQ4",
+            "y": "4lsISqlFLF1wJeSlVSy_sneBRJmIrIAhQidTu7iht8I",
+            "kid": "eudi-statuslist-dev",
+            "use": "sig",
+            "alg": "ES256"
+          }
+        ]
+      }
+    },
+    "http://localhost:18080": {
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "vWCtWe8hO27NjYntkvsZss8681QgWIRttRYW9ZbPeQ4",
+            "y": "4lsISqlFLF1wJeSlVSy_sneBRJmIrIAhQidTu7iht8I",
+            "kid": "eudi-statuslist-dev",
+            "use": "sig",
+            "alg": "ES256"
+          }
+        ]
+      }
     }
   }
 }

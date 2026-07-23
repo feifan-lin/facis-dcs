@@ -58,6 +58,34 @@ func (t *TrustConfig) ResolveECDSAPublicKey(issuer string) (*ecdsa.PublicKey, er
 	return nil, fmt.Errorf("no usable EC key for issuer %q", issuer)
 }
 
+// ContainsECDSAPublicKeyForStatusListURI reports whether pub is pinned in trust for
+// an issuer identity that covers statusListURI.
+// Used when a Status List JWT has no iss and presents the Status Issuer key via x5c.
+func (t *TrustConfig) ContainsECDSAPublicKeyForStatusListURI(statusListURI string, pub *ecdsa.PublicKey) bool {
+	if t == nil || pub == nil {
+		return false
+	}
+	statusListURI = strings.TrimSpace(statusListURI)
+	if statusListURI == "" {
+		return false
+	}
+	for issuer, entry := range t.Issuers {
+		if !issuerTrustedForStatusListURI(issuer, statusListURI) {
+			continue
+		}
+		for _, key := range entry.JWKS.Keys {
+			trusted, err := jwkToECDSAPublicKey(key)
+			if err != nil {
+				continue
+			}
+			if trusted.Equal(pub) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // ResolveECDSAPublicKeyByKID looks up an EC P-256 key by JWK kid within the trust scope
 // of statusListURI. COSE kid values are not globally unique; URI binding is always required.
 func (t *TrustConfig) ResolveECDSAPublicKeyByKID(statusListURI, kid string) (*ecdsa.PublicKey, error) {
