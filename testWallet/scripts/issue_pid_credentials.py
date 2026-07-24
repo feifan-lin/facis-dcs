@@ -267,6 +267,9 @@ def dpop_request(
     If 401 + DPoP-Nonce, retry once with nonce in proof.
     Optional dpop_nonce seeds the first attempt.
     """
+    # Ignore AS token_type casing/value — resource server requires "DPoP".
+    _ = token_type
+    auth_scheme = "DPoP"
 
     def once(nonce: str | None) -> tuple[int, dict[str, str], bytes]:
         dpop = _dpop_proof(
@@ -278,7 +281,7 @@ def dpop_request(
             nonce=nonce,
         )
         headers = {
-            "Authorization": f"{token_type} {access_token}",
+            "Authorization": f"{auth_scheme} {access_token}",
             "DPoP": dpop,
         }
         if content_type:
@@ -289,6 +292,19 @@ def dpop_request(
     if status == 401 and headers.get("dpop-nonce") and headers["dpop-nonce"] != dpop_nonce:
         status, headers, raw = once(headers["dpop-nonce"])
     return status, headers, raw
+
+
+def _http_error_detail(status: int, headers: dict[str, str], raw: bytes, limit: int = 1200) -> str:
+    """Include WWW-Authenticate / DPoP-Nonce so CI 401s are diagnosable."""
+    auth = headers.get("www-authenticate") or ""
+    nonce = headers.get("dpop-nonce") or ""
+    extras = []
+    if auth:
+        extras.append(f"www-authenticate={auth!r}")
+    if nonce:
+        extras.append(f"dpop-nonce={nonce!r}")
+    suffix = f" ({', '.join(extras)})" if extras else ""
+    return f"HTTP {status}: {raw[:limit]!r}{suffix}"
 
 
 # ---------------------------------------------------------------------------
@@ -775,7 +791,7 @@ def issue_pid_for_user(
         "format": fmt,
         "proofs": {"jwt": [proof_jwt]},
     }
-    status, _headers, raw = dpop_request(
+    status, cred_headers, raw = dpop_request(
         credential_endpoint,
         method="POST",
         access_token=access_token,
@@ -787,7 +803,9 @@ def issue_pid_for_user(
         dpop_nonce=dpop_nonce,
     )
     if status >= 400:
-        raise RuntimeError(f"credential endpoint HTTP {status}: {raw[:1200]!r}")
+        raise RuntimeError(
+            f"credential endpoint {_http_error_detail(status, cred_headers, raw)}"
+        )
     data = json.loads(raw.decode("utf-8"))
     if not isinstance(data, dict):
         raise RuntimeError(f"unexpected credential response: {data!r}")
