@@ -260,10 +260,12 @@ def dpop_request(
     dpop_public: dict[str, str],
     body: bytes | None = None,
     content_type: str | None = None,
+    dpop_nonce: str | None = None,
 ) -> tuple[int, dict[str, str], bytes]:
     """Authenticated request with DPoP.
 
-    Local-dev: if 401 + DPoP-Nonce, retry once with nonce in proof.
+    If 401 + DPoP-Nonce, retry once with nonce in proof.
+    Optional dpop_nonce seeds the first attempt.
     """
 
     def once(nonce: str | None) -> tuple[int, dict[str, str], bytes]:
@@ -283,8 +285,8 @@ def dpop_request(
             headers["Content-Type"] = content_type
         return _fetch(url, method=method, body=body, headers=headers, allow_redirects=False)
 
-    status, headers, raw = once(None)
-    if status == 401 and headers.get("dpop-nonce"):
+    status, headers, raw = once(dpop_nonce)
+    if status == 401 and headers.get("dpop-nonce") and headers["dpop-nonce"] != dpop_nonce:
         status, headers, raw = once(headers["dpop-nonce"])
     return status, headers, raw
 
@@ -745,14 +747,14 @@ def issue_pid_for_user(
     access_token = str(token_data["access_token"])
     token_type = str(token_data.get("token_type") or "DPoP")
 
-    status, _headers, raw = dpop_request(
+    # Nonce endpoint is permitAll; sending Authorization+DPoP triggers DPoP auth
+    # (issuer.dpop.nonce.enabled) and fails with 401 before the handler runs.
+    status, nonce_headers, raw = _fetch(
         nonce_endpoint,
         method="POST",
-        access_token=access_token,
-        token_type=token_type,
-        dpop_private=dpop_private,
-        dpop_public=dpop_public,
         body=b"",
+        headers={"Accept": "application/json"},
+        allow_redirects=False,
     )
     if status >= 400:
         raise RuntimeError(f"nonce endpoint HTTP {status}: {raw[:800]!r}")
@@ -760,6 +762,7 @@ def issue_pid_for_user(
     c_nonce = str(nonce_data.get("c_nonce") or "").strip()
     if not c_nonce:
         raise RuntimeError(f"nonce response missing c_nonce: {nonce_data}")
+    dpop_nonce = (nonce_headers.get("dpop-nonce") or "").strip() or None
 
     proof_jwt = build_proof_jwt(
         issuer_url=proof_aud,
@@ -781,6 +784,7 @@ def issue_pid_for_user(
         dpop_public=dpop_public,
         body=json.dumps(credential_request).encode("utf-8"),
         content_type="application/json",
+        dpop_nonce=dpop_nonce,
     )
     if status >= 400:
         raise RuntimeError(f"credential endpoint HTTP {status}: {raw[:1200]!r}")
