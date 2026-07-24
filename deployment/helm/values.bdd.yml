@@ -109,11 +109,11 @@ keycloak:
     wellKnownPathRewrite:
       enabled: true
       pathSuffix: "realms/gaia-x"
+  edgeProxy:
+    backendHost: "dcs-keycloak:8080"
   extraEnv:
     - name: KC_HOSTNAME
-      value: "dcs-keycloak"
-    - name: KC_HOSTNAME_PORT
-      value: "8080"
+      value: "http://dcs-keycloak:8080"
     - name: KC_HOSTNAME_STRICT_HTTPS
       value: "false"
     - name: KC_HTTP_ENABLED

@@ -811,7 +811,20 @@
       "protocol": "openid-connect",
       "attributes": {
         "include.in.token.scope": "true"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "pid-issuer-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "pid-issuer-srv",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     },
     {
       "name": "dcs-fc-audience",
