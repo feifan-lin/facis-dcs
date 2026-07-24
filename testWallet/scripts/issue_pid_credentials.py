@@ -79,9 +79,11 @@ DEV_LOCAL_ADAPTATIONS: tuple[str, ...] = (
     "Issuer metadata is loaded from the Spring base-path well-known URL "
     "(EUDI pid-issuer), not the RFC8414 host/path-insertion form.",
     "Credential/nonce endpoint hosts from metadata are rewritten onto the "
-    "reachable local issuer URL (NodePort).",
+    "reachable issuer URL (dev NodePort or kind Traefik).",
+    "Authorization/token endpoint hosts from Keycloak discovery are rewritten "
+    "onto the explicit realm URL (avoids in-cluster names like dcs-keycloak).",
     "The authorization server is taken from an explicit realm URL rather than "
-    "metadata authorization_servers (avoids in-cluster hostnames on the laptop).",
+    "metadata authorization_servers.",
     "Token acquisition prefers Resource Owner Password + DPoP for headless runs; "
     "authorization_code + PKCE remains implemented as the browser-shaped path.",
     "DPoP requests retry once when the server supplies a DPoP-Nonce.",
@@ -169,12 +171,13 @@ def as_metadata_url_oidc(auth_server: str) -> str:
     return f"{auth_server.rstrip('/')}/.well-known/openid-configuration"
 
 
-def rewrite_endpoint_onto_issuer(issuer_url: str, metadata_url: str) -> str:
-    """Local-dev: keep path/query from metadata; use reachable issuer host."""
-    issuer = urllib.parse.urlparse(issuer_url)
+def rewrite_endpoint_onto_base(base_url: str, metadata_url: str) -> str:
+    """Keep path/query from metadata; replace scheme/host with a reachable base.
+    """
+    base = urllib.parse.urlparse(base_url)
     meta = urllib.parse.urlparse(metadata_url)
     return urllib.parse.urlunparse(
-        (issuer.scheme, issuer.netloc, meta.path, meta.params, meta.query, meta.fragment)
+        (base.scheme, base.netloc, meta.path, meta.params, meta.query, meta.fragment)
     )
 
 
@@ -704,11 +707,17 @@ def issue_pid_for_user(
 
     auth_endpoint = str(auth_meta.get("authorization_endpoint") or "")
     token_endpoint = str(auth_meta.get("token_endpoint") or "")
-    # Local-dev: map advertised endpoints onto reachable issuer URL.
-    credential_endpoint = rewrite_endpoint_onto_issuer(
+    # Map advertised endpoints onto caller-reachable bases:
+    # - auth/token → realm_url (host Traefik / NodePort, not dcs-keycloak)
+    # - credential/nonce → issuer_url
+    auth_endpoint = rewrite_endpoint_onto_base(realm_url, auth_endpoint)
+    token_endpoint = rewrite_endpoint_onto_base(realm_url, token_endpoint)
+    credential_endpoint = rewrite_endpoint_onto_base(
         issuer_url, str(issuer_meta.get("credential_endpoint") or "")
     )
-    nonce_endpoint = rewrite_endpoint_onto_issuer(issuer_url, str(issuer_meta.get("nonce_endpoint") or ""))
+    nonce_endpoint = rewrite_endpoint_onto_base(
+        issuer_url, str(issuer_meta.get("nonce_endpoint") or "")
+    )
     proof_aud = str(issuer_meta.get("credential_issuer") or issuer_url).rstrip("/")
     if not all([auth_endpoint, token_endpoint, credential_endpoint, nonce_endpoint]):
         raise RuntimeError("missing auth/token/credential/nonce endpoint")
