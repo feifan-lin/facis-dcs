@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
@@ -9,6 +9,7 @@ import AuditView from '@contract-workflow-engine/components/AuditView.vue'
 import ContractDetailsEditor from '@contract-workflow-engine/components/ContractDetailsEditor.vue'
 import ContractStructureTree from '@contract-workflow-engine/components/ContractStructureTree.vue'
 import { useContractDataPreprocess } from '@contract-workflow-engine/composables/useContractDataPreprocess'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
 import { useContractContentValuesStore } from '@contract-workflow-engine/store/contractContentValuesStore'
 import { useContractEditorUiStore } from '@contract-workflow-engine/store/contractEditorUiStore'
 import ContractMachineReadableView from '@/components/contract/ContractMachineReadableView.vue'
@@ -20,13 +21,17 @@ import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useContractsStore } from '@/stores/contracts-store'
 import { ContractState } from '@/types/contract-state'
+import { contractWithAcceptedProposals } from '@/utils/contract-negotiations'
+import { reportActionError } from '@/utils/report-action-error'
 import type { Contract } from '@/models/contract/contract'
 import type { UserRole } from '@/types/user-role'
 import type { VerificationResult } from '@contract-workflow-engine/composables/useSemanticValueVerification'
 
 const route = useRoute()
+const router = useRouter()
 
 const authStore = useAuthStore()
+const { isCreator } = useContractPermissions()
 const contractsStore = useContractsStore()
 const { contracts } = storeToRefs(contractsStore)
 const dcsDraftStore = useDcsDraftStore()
@@ -38,12 +43,39 @@ const { activeTab } = storeToRefs(contractEditorUiStore)
 
 const contract: Ref<Contract | null> = ref(null)
 const verificationResult: Ref<VerificationResult | null> = ref(null)
+const isReopening = ref(false)
+
+const canReopenNegotiation = computed(() => isCreator.value && contract.value?.state === ContractState.rejected)
+
+/** REJECTED → NEGOTIATION only, no content rewrite. */
+const reopenNegotiation = async () => {
+  if (!contract.value || !canReopenNegotiation.value) return
+  isReopening.value = true
+  try {
+    const response = await contractWorkflowService.submit({
+      did: contract.value.did,
+      updated_at: contract.value.updated_at,
+    })
+    if (response.did) {
+      await router.push({ name: ROUTES.CONTRACTS.NEGOTIATE, params: { did: response.did } })
+    }
+  } catch (err) {
+    reportActionError(err, 'Reopen negotiation')
+  } finally {
+    isReopening.value = false
+  }
+}
+
+// Details/Content show formal + accepted proposals so the page matches what
+// Submit will merge; the stored formal row itself is unchanged until then.
+const shownContract = computed(() => (contract.value ? contractWithAcceptedProposals(contract.value) : null))
 
 const isAuditingAuthorized = computed(
   () =>
     (['AUDITOR', 'COMPLIANCE_OFFICER'] as UserRole[]).some((role) => authStore.user?.roles?.includes(role)) ?? false,
 )
 
+// Proposals belong on Negotiate — View is read-only and must not expose them.
 const tabs = computed(() =>
   contractEditorUiStore.availableTabs(contract.value?.state ?? ContractState.draft, [
     'details',
@@ -51,6 +83,16 @@ const tabs = computed(() =>
     'audit',
     'structure',
   ]),
+)
+
+watch(
+  tabs,
+  (list) => {
+    if (!list.some((tab) => tab.id === activeTab.value)) {
+      contractEditorUiStore.setActiveTab('details')
+    }
+  },
+  { immediate: true },
 )
 
 // The view holds its own copy from retrieve-by-id rather than the contracts
@@ -61,7 +103,8 @@ const loadContract = async () => {
   if (!id || Array.isArray(id)) return
   try {
     contract.value = await contractWorkflowService.retrieveById({ did: id })
-    applyContractDataToDraft(contract.value?.contract_data)
+    const baseline = contract.value ? contractWithAcceptedProposals(contract.value) : null
+    applyContractDataToDraft(baseline?.contract_data)
   } catch (err: unknown) {
     console.error('Failed to load contract', err)
   }
@@ -95,7 +138,10 @@ const ancestors = computed(() => {
 const childContracts = computed(() => contracts.value.filter((c) => c.parent_contract_did === contract.value?.did))
 
 const contractTitle = computed(
-  () => contract.value?.name ?? contract.value?.contract_data?.['dcs:metadata']?.['dcs:title'] ?? contract.value?.did,
+  () =>
+    shownContract.value?.name ??
+    shownContract.value?.contract_data?.['dcs:metadata']?.['dcs:title'] ??
+    shownContract.value?.did,
 )
 
 // After the target is designated the contract's updated_at moves on, so this
@@ -190,7 +236,7 @@ const exportBundle = async () => {
           <div class="mx-auto max-w-4xl p-6">
             <div class="grid grid-cols-1 gap-4">
               <div v-show="activeTab === 'details'">
-                <ContractDetailsEditor :contract="contract" disabled />
+                <ContractDetailsEditor v-if="shownContract" :contract="shownContract" disabled />
 
                 <!-- Where this contract deploys to (ADR-25) -->
                 <div class="card mt-4 border border-base-300 bg-base-100 shadow-sm">
@@ -290,7 +336,7 @@ const exportBundle = async () => {
                          the document it renders (UC-04 stimulus 5). After it,
                          not before: the readable contract is what a person
                          came for. -->
-                    <ContractMachineReadableView :contract="contract" />
+                    <ContractMachineReadableView v-if="shownContract" :contract="shownContract" />
                   </div>
                 </div>
               </div>
@@ -370,6 +416,15 @@ const exportBundle = async () => {
         </button>
         <button class="btn btn-outline md:w-36" :disabled="exporting || !contract" @click="exportBundle">
           Export bundle
+        </button>
+        <button
+          v-if="canReopenNegotiation"
+          class="btn flex-1 btn-primary"
+          :disabled="isReopening"
+          @click="reopenNegotiation"
+        >
+          <span v-if="isReopening" class="loading loading-sm loading-spinner"></span>
+          Reopen negotiation
         </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
