@@ -178,6 +178,9 @@ def _export_contract_pdf(context, base_url, did):
 @given('the dedicated organization "{org}" is used for this scenario\'s identities')
 def step_given_dedicated_org(context, org):
     context.encryption_org = org
+    if "_encryption_org_previous" not in context.__dict__:
+        context._encryption_org_previous = AuthService.DEFAULT_ORGANIZATION
+    AuthService.DEFAULT_ORGANIZATION = org
 
 
 # ---------------------------------------------------------------------------

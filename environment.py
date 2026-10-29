@@ -6,6 +6,7 @@ from pathlib import Path
 import psycopg2
 
 from steps.support import localhost_resolver
+from steps.support.services.auth_service import AuthService
 
 
 SKIP_TAGS = {"skip", "skipped"}
@@ -91,6 +92,12 @@ def before_scenario(context, scenario):
 
 	if "clean_db" in scenario.tags:
 		cleanup_database(context)
+
+
+def after_scenario(context, scenario):
+	previous = context.__dict__.pop("_encryption_org_previous", None)
+	if previous is not None:
+		AuthService.DEFAULT_ORGANIZATION = previous
 
 
 def before_all(context):
